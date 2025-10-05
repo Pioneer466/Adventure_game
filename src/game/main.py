@@ -114,6 +114,15 @@ def draw(
         color = (220, 20, 60) if index < player.health else (169, 169, 169)
         pygame.draw.rect(screen, color, heart_rect, border_radius=4)
 
+    instructions = [
+        "Déplacements : flèches / WASD",
+        "Saut : ↑ ou W",
+        "Attaque : barre d'espace",
+    ]
+    for idx, line in enumerate(instructions):
+        text_surface = font.render(line, True, (20, 20, 20))
+        screen.blit(text_surface, (20, 60 + idx * 24))
+
     if state == "game_over":
         overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
@@ -136,6 +145,7 @@ def update_game(
     player: entities.Player,
     platforms: List[entities.Platform],
     enemies: List[entities.Enemy],
+    world_size: Tuple[int, int],
     dt: float,
 ) -> None:
     """Update all game entities."""
@@ -150,6 +160,10 @@ def update_game(
 
         if player.rect.colliderect(enemy.rect):
             player.take_damage(1)
+
+    # Falling off the world defeats the player immediately.
+    if player.rect.top > world_size[1]:
+        player.health = 0
 
 
 def run() -> None:
@@ -186,7 +200,7 @@ def run() -> None:
             continue
 
         if state == "playing":
-            update_game(player, platforms, enemies, dt)
+            update_game(player, platforms, enemies, world_size, dt)
 
             if player.is_dead:
                 state = "game_over"
