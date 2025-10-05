@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import pygame
 
@@ -19,6 +19,9 @@ def load_level() -> tuple[
     List[entities.Enemy],
     pygame.Rect,
     tuple[int, int],
+    pygame.Rect,
+    Tuple[int, int],
+    List[entities.EnergyOrb],
 ]:
     """Load the first level and return the initialized objects."""
 
@@ -32,7 +35,14 @@ def load_level() -> tuple[
     player = entities.Player(player_start[0], player_start[1])
     finish_rect = pygame.Rect(*data["finish_zone"])
     world_size = tuple(data.get("world_size", (960, 640)))
-    return player, platforms, enemies, finish_rect, world_size
+    checkpoint_data = data.get("checkpoint")
+    checkpoint_rect = pygame.Rect(*checkpoint_data["zone"]) if checkpoint_data else pygame.Rect(0, 0, 0, 0)
+    checkpoint_respawn: Tuple[int, int] = tuple(checkpoint_data["respawn"]) if checkpoint_data else player_start
+    energy_orbs = [
+        entities.EnergyOrb.from_center(orb["x"], orb["y"], orb.get("diameter", 28))
+        for orb in data.get("energy_orbs", [])
+    ]
+    return player, platforms, enemies, finish_rect, world_size, checkpoint_rect, checkpoint_respawn, energy_orbs
 
 
 def compute_camera(
@@ -56,11 +66,12 @@ def handle_events(
     player: entities.Player,
     enemies: List[entities.Enemy],
     state: str,
-) -> tuple[bool, str, bool]:
-    """Process events, returning (running, current_state, restart_requested)."""
+) -> tuple[bool, str, bool, bool]:
+    """Process events, returning (running, current_state, restart_requested, jump_pressed)."""
 
     restart_requested = False
     running = True
+    jump_pressed = False
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -68,13 +79,15 @@ def handle_events(
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 running = False
+            elif event.key in (pygame.K_UP, pygame.K_w):
+                jump_pressed = True
             elif event.key == pygame.K_SPACE and state == "playing":
                 defeated = player.attack(enemies)
                 for enemy in defeated:
                     enemies.remove(enemy)
             elif event.key == pygame.K_r and state == "game_over":
                 restart_requested = True
-    return running, state, restart_requested
+    return running, state, restart_requested, jump_pressed
 
 
 def draw(
@@ -86,6 +99,8 @@ def draw(
     camera: pygame.Vector2,
     state: str,
     font: pygame.font.Font,
+    energy_orbs: List[entities.EnergyOrb],
+    checkpoint_rect: pygame.Rect,
 ) -> None:
     """Render the current game state to the screen."""
 
@@ -94,7 +109,21 @@ def draw(
     # Draw ground/platforms
     for platform in platforms:
         offset_rect = platform.rect.move(-camera.x, -camera.y)
-        pygame.draw.rect(screen, (139, 69, 19), offset_rect)
+        pygame.draw.rect(screen, (46, 139, 87), offset_rect)
+
+    if checkpoint_rect.width > 0 and checkpoint_rect.height > 0:
+        checkpoint_draw = checkpoint_rect.move(-camera.x, -camera.y)
+        pygame.draw.rect(screen, (173, 216, 230), checkpoint_draw, 2)
+
+    for orb in energy_orbs:
+        orb_rect = orb.rect.move(-camera.x, -camera.y)
+        if orb.active:
+            pygame.draw.ellipse(screen, (255, 255, 0), orb_rect)
+            inner = orb_rect.inflate(-orb_rect.width // 2, -orb_rect.height // 2)
+            pygame.draw.ellipse(screen, (255, 140, 0), inner)
+        else:
+            faded = orb_rect.inflate(-orb_rect.width // 5, -orb_rect.height // 5)
+            pygame.draw.ellipse(screen, (180, 180, 180), faded, 2)
 
     # Finish zone
     pygame.draw.rect(screen, (255, 215, 0), finish_rect.move(-camera.x, -camera.y))
@@ -104,6 +133,12 @@ def draw(
         pygame.draw.rect(screen, (220, 20, 60), enemy.rect.move(-camera.x, -camera.y))
     player_rect = player.rect.move(-camera.x, -camera.y)
     pygame.draw.rect(screen, (65, 105, 225), player_rect)
+
+    if player.is_attacking:
+        attack_rect = player.get_attack_hitbox().move(-camera.x, -camera.y)
+        overlay = pygame.Surface(attack_rect.size, pygame.SRCALPHA)
+        overlay.fill((255, 215, 0, 120))
+        screen.blit(overlay, attack_rect.topleft)
 
     # Draw health (three hearts)
     heart_size = 20
@@ -116,8 +151,9 @@ def draw(
 
     instructions = [
         "Déplacements : flèches / WASD",
-        "Saut : ↑ ou W",
+        "Saut : ↑ ou W (double saut après une boule d'énergie)",
         "Attaque : barre d'espace",
+        "R : Rejouer au dernier checkpoint",
     ]
     for idx, line in enumerate(instructions):
         text_surface = font.render(line, True, (20, 20, 20))
@@ -147,11 +183,16 @@ def update_game(
     enemies: List[entities.Enemy],
     world_size: Tuple[int, int],
     dt: float,
-) -> None:
-    """Update all game entities."""
+    jump_pressed: bool,
+    energy_orbs: List[entities.EnergyOrb],
+    checkpoint_rect: pygame.Rect,
+    checkpoint_reached: bool,
+    checkpoint_respawn: Tuple[int, int],
+) -> Tuple[bool, Optional[Tuple[int, int]]]:
+    """Update all game entities. Returns checkpoint status and optional respawn."""
 
     pressed_keys = pygame.key.get_pressed()
-    player.update(pressed_keys, platforms, dt)
+    player.update(pressed_keys, jump_pressed, platforms, dt)
 
     for enemy in list(enemies):
         enemy.update(platforms, dt)
@@ -161,9 +202,23 @@ def update_game(
         if player.rect.colliderect(enemy.rect):
             player.take_damage(1)
 
+    new_respawn_point: Optional[Tuple[int, int]] = None
+    if checkpoint_rect.width > 0 and checkpoint_rect.height > 0 and not checkpoint_reached:
+        if player.rect.colliderect(checkpoint_rect):
+            checkpoint_reached = True
+            new_respawn_point = checkpoint_respawn
+
+    for orb in energy_orbs:
+        orb.update(dt)
+        if orb.active and player.rect.colliderect(orb.rect):
+            player.add_double_jump_charge()
+            orb.collect()
+
     # Falling off the world defeats the player immediately.
     if player.rect.top > world_size[1]:
         player.health = 0
+
+    return checkpoint_reached, new_respawn_point
 
 
 def run() -> None:
@@ -181,26 +236,68 @@ def run() -> None:
         List[entities.Enemy],
         pygame.Rect,
         Tuple[int, int],
+        pygame.Rect,
+        Tuple[int, int],
+        List[entities.EnergyOrb],
     ]:
         return load_level()
 
-    player, platforms, enemies, finish_rect, world_size = reset_level()
+    (
+        player,
+        platforms,
+        enemies,
+        finish_rect,
+        world_size,
+        checkpoint_rect,
+        checkpoint_respawn,
+        energy_orbs,
+    ) = reset_level()
     state = "playing"
+    checkpoint_reached = False
+    current_respawn = tuple(player.rect.topleft)
 
     running = True
     while running:
         dt = clock.tick(60) / 1000.0
-        running, state, restart = handle_events(player, enemies, state)
+        running, state, restart, jump_pressed = handle_events(player, enemies, state)
         if not running:
             break
 
         if restart:
-            player, platforms, enemies, finish_rect, world_size = reset_level()
-            state = "playing"
+            if checkpoint_reached:
+                player.respawn(current_respawn)
+                state = "playing"
+            else:
+                (
+                    player,
+                    platforms,
+                    enemies,
+                    finish_rect,
+                    world_size,
+                    checkpoint_rect,
+                    checkpoint_respawn,
+                    energy_orbs,
+                ) = reset_level()
+                checkpoint_reached = False
+                current_respawn = tuple(player.rect.topleft)
+                state = "playing"
             continue
 
         if state == "playing":
-            update_game(player, platforms, enemies, world_size, dt)
+            checkpoint_reached, new_respawn = update_game(
+                player,
+                platforms,
+                enemies,
+                world_size,
+                dt,
+                jump_pressed,
+                energy_orbs,
+                checkpoint_rect,
+                checkpoint_reached,
+                checkpoint_respawn,
+            )
+            if new_respawn:
+                current_respawn = new_respawn
 
             if player.is_dead:
                 state = "game_over"
@@ -208,7 +305,18 @@ def run() -> None:
                 state = "victory"
 
         camera = compute_camera(player.rect, world_size, screen.get_size())
-        draw(screen, player, platforms, enemies, finish_rect, camera, state, font)
+        draw(
+            screen,
+            player,
+            platforms,
+            enemies,
+            finish_rect,
+            camera,
+            state,
+            font,
+            energy_orbs,
+            checkpoint_rect,
+        )
 
     pygame.quit()
 

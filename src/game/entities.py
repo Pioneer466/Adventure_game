@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence
+from typing import Iterable, List, Sequence, Tuple
 
 import pygame
 
@@ -19,6 +19,34 @@ class Platform:
     @classmethod
     def from_dimensions(cls, x: int, y: int, width: int, height: int) -> "Platform":
         return cls(pygame.Rect(x, y, width, height))
+
+
+@dataclass
+class EnergyOrb:
+    """Collectible granting a temporary double-jump charge."""
+
+    rect: pygame.Rect
+    respawn_delay: float = 5.0
+    active: bool = True
+    timer: float = 0.0
+
+    @classmethod
+    def from_center(cls, x: int, y: int, diameter: int = 28) -> "EnergyOrb":
+        rect = pygame.Rect(0, 0, diameter, diameter)
+        rect.center = (x, y)
+        return cls(rect)
+
+    def collect(self) -> None:
+        self.active = False
+        self.timer = 0.0
+
+    def update(self, dt: float) -> None:
+        if self.active:
+            return
+        self.timer += dt
+        if self.timer >= self.respawn_delay:
+            self.active = True
+            self.timer = 0.0
 
 
 class Entity:
@@ -67,14 +95,21 @@ class Player(Entity):
         self.jump_strength = -420
         self.attack_cooldown = 0.4
         self.attack_timer = 0.0
+        self.attack_indicator_duration = 0.18
+        self.attack_indicator_timer = 0.0
+        self.last_attack_rect = self.rect.copy()
         self.max_health = 3
         self.health = self.max_health
         self.invulnerability_time = 0.8
         self.invulnerability_timer = 0.0
+        self.facing = 1
+        self.double_jump_charges = 0
+        self.air_jump_performed = False
 
     def update(
         self,
         pressed_keys: Sequence[bool],
+        jump_pressed: bool,
         platforms: Sequence[Platform],
         dt: float,
     ) -> None:
@@ -86,14 +121,31 @@ class Player(Entity):
         if pressed_keys[pygame.K_RIGHT] or pressed_keys[pygame.K_d]:
             self.velocity.x = self.speed
 
-        if (pressed_keys[pygame.K_UP] or pressed_keys[pygame.K_w]) and self.on_ground:
-            self.velocity.y = self.jump_strength
+        if self.velocity.x > 0:
+            self.facing = 1
+        elif self.velocity.x < 0:
+            self.facing = -1
+
+        if jump_pressed:
+            if self.on_ground:
+                self.velocity.y = self.jump_strength
+                self.on_ground = False
+                self.air_jump_performed = False
+            elif self.double_jump_charges > 0 and not self.air_jump_performed:
+                self.velocity.y = self.jump_strength
+                self.double_jump_charges = max(0, self.double_jump_charges - 1)
+                self.air_jump_performed = True
 
         self.apply_gravity(dt)
         self.move_and_collide(platforms, dt)
 
+        if self.on_ground:
+            self.air_jump_performed = False
+
         if self.attack_timer > 0:
             self.attack_timer = max(0.0, self.attack_timer - dt)
+        if self.attack_indicator_timer > 0:
+            self.attack_indicator_timer = max(0.0, self.attack_indicator_timer - dt)
         if self.invulnerability_timer > 0:
             self.invulnerability_timer = max(0.0, self.invulnerability_timer - dt)
 
@@ -105,6 +157,14 @@ class Player(Entity):
 
         self.attack_timer = self.attack_cooldown
         attack_rect = self.rect.inflate(40, 20)
+        reach = 60
+        if self.facing >= 0:
+            attack_rect.width += reach
+        else:
+            attack_rect.left -= reach
+            attack_rect.width += reach
+        self.last_attack_rect = attack_rect.copy()
+        self.attack_indicator_timer = self.attack_indicator_duration
         defeated: List[Enemy] = []
         for enemy in enemies:
             if enemy.rect.colliderect(attack_rect):
@@ -126,6 +186,27 @@ class Player(Entity):
     @property
     def is_dead(self) -> bool:
         return self.health <= 0
+
+    @property
+    def is_attacking(self) -> bool:
+        return self.attack_indicator_timer > 0
+
+    def get_attack_hitbox(self) -> pygame.Rect:
+        return self.last_attack_rect.copy()
+
+    def add_double_jump_charge(self, amount: int = 1) -> None:
+        self.double_jump_charges += max(0, amount)
+
+    def respawn(self, position: Tuple[int, int]) -> None:
+        self.rect.topleft = position
+        self.velocity.update(0, 0)
+        self.health = self.max_health
+        self.invulnerability_timer = 0.0
+        self.attack_timer = 0.0
+        self.attack_indicator_timer = 0.0
+        self.double_jump_charges = 0
+        self.air_jump_performed = False
+        self.on_ground = False
 
 
 class Enemy(Entity):
