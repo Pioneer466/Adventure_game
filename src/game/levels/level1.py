@@ -10,41 +10,69 @@ LevelData = Dict[str, object]
 def load_level() -> LevelData:
     """Return the level data describing geometry and entity placement."""
 
-    width, height = 960, 640
-    ground_height = 80
+    width, height = 1800, 720
+    ground_height = 100
 
     platforms: List[Tuple[int, int, int, int]] = []
 
-    # Ground platform covering the bottom of the level.
-    platforms.append((0, height - ground_height, width, ground_height))
+    ground_y = height - ground_height
 
-    # Floating platforms to create vertical gameplay.
+    # Ground segments with gaps to encourage jumping and pacing.
     platforms.extend(
         [
-            (150, 420, 160, 20),
-            (360, 340, 140, 20),
-            (580, 280, 180, 20),
-            (780, 200, 120, 20),
+            (0, ground_y, 360, ground_height),
+            (480, ground_y, 240, ground_height),
+            (820, ground_y, 220, ground_height),
+            (1120, ground_y, 240, ground_height),
+            (1420, ground_y, 380, ground_height),
         ]
     )
 
-    # Elevated platforms leading to the finish room.
+    # Introductory ramps easing the player into the first jumps.
     platforms.extend(
         [
-            (100, 520, 140, 20),
-            (320, 480, 160, 20),
-            (540, 440, 160, 20),
-            (760, 400, 160, 20),
+            (320, ground_y - 60, 140, 20),
+            (420, ground_y - 120, 110, 20),
+        ]
+    )
+
+    # Mid-level floating platforms forming a winding aerial route.
+    platforms.extend(
+        [
+            (560, ground_y - 80, 140, 20),
+            (700, ground_y - 120, 120, 20),
+            (860, ground_y - 160, 140, 20),
+            (940, ground_y - 260, 120, 20),
+            (1060, ground_y - 200, 140, 20),
+            (1160, ground_y - 160, 140, 20),
+            (1240, ground_y - 280, 100, 20),
+            (1320, ground_y - 200, 120, 20),
+            (1360, ground_y - 140, 120, 20),
+            (1380, ground_y - 100, 100, 20),
+            (1460, ground_y - 60, 80, 20),
+        ]
+    )
+
+    # Finish room structure with walls, ceiling and a raised floor.
+    platforms.extend(
+        [
+            (1440, ground_y - 120, 20, 120),
+            (1780, ground_y - 120, 20, 120),
+            (1440, ground_y - 120, 360, 20),
+            (1520, ground_y - 60, 200, 20),
+            (1420, ground_y - 60, 60, 20),
         ]
     )
 
     enemies = [
-        {"x": 200, "y": height - ground_height - 50, "min_x": 150, "max_x": 320, "health": 3},
-        {"x": 420, "y": 320, "min_x": 360, "max_x": 500, "health": 2},
-        {"x": 610, "y": 260, "min_x": 580, "max_x": 760, "health": 3},
+        {"x": 180, "y": ground_y - 50, "min_x": 80, "max_x": 320, "health": 3},
+        {"x": 600, "y": ground_y - 130, "min_x": 560, "max_x": 700, "health": 2},
+        {"x": 880, "y": ground_y - 210, "min_x": 860, "max_x": 1000, "health": 3},
+        {"x": 950, "y": ground_y - 50, "min_x": 820, "max_x": 1060, "health": 3},
+        {"x": 1620, "y": ground_y - 110, "min_x": 1520, "max_x": 1720, "health": 4},
     ]
 
-    finish_zone = (880, height - ground_height - 120, 60, 120)
+    finish_zone = (1600, ground_y - 160, 120, 120)
 
     return {
         "player_start": (50, height - ground_height - 60),
