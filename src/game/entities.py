@@ -11,6 +11,12 @@ import pygame
 GRAVITY = 1200  # pixels per second squared
 
 
+def _assets_dir() -> Path:
+    """Return the directory containing runtime assets (sprites, etc.)."""
+
+    return Path(__file__).resolve().parents[2] / "assets"
+
+
 @dataclass
 class Platform:
     """Static ground element the player and enemies can stand on."""
@@ -220,7 +226,9 @@ class Player(Entity):
         return self.last_attack_rect.copy()
 
     def add_double_jump_charge(self, amount: int = 1) -> None:
-        self.double_jump_charges += max(0, amount)
+        if amount <= 0:
+            return
+        self.double_jump_charges = min(1, self.double_jump_charges + amount)
 
     def respawn(self, position: Tuple[int, int]) -> None:
         self.rect.topleft = position
@@ -242,8 +250,7 @@ class Player(Entity):
         if cls._sprite_surface is not None:
             return cls._sprite_surface
 
-        assets_dir = Path(__file__).resolve().parent.parent / "assets"
-        sprite_path = assets_dir / "hero.png"
+        sprite_path = _assets_dir() / "hero.png"
         if not sprite_path.exists():
             return None
 
@@ -259,6 +266,7 @@ class Player(Entity):
                 pass
 
         cls._sprite_surface = pygame.transform.scale(image, self.rect.size)
+        cls._sprite_surface_flipped = None
         return cls._sprite_surface
 
     def get_oriented_sprite(self) -> Optional[pygame.Surface]:
@@ -278,11 +286,15 @@ class Player(Entity):
 class Enemy(Entity):
     """A basic enemy with a patrol pattern and multiple hit points."""
 
+    _sprite_surface: Optional[pygame.Surface] = None
+    _sprite_surface_flipped: Optional[pygame.Surface] = None
+
     def __init__(self, x: int, y: int, patrol_range: tuple[int, int], speed: int = 120, health: int = 3) -> None:
         super().__init__(x, y, 40, 50)
         self.patrol_range = patrol_range
         self.speed = speed
         self.direction = 1
+        self.facing = 1
         self.health = max(2, health)
 
     def update(self, platforms: Sequence[Platform], dt: float) -> None:
@@ -301,6 +313,7 @@ class Enemy(Entity):
             self.rect.right = self.patrol_range[1]
             self.direction = -1
 
+        self.facing = self.direction
         self.velocity.x = self.speed * self.direction
 
     def take_damage(self, amount: int) -> bool:
@@ -308,3 +321,42 @@ class Enemy(Entity):
 
         self.health -= amount
         return self.health <= 0
+
+    def _ensure_sprite(self) -> Optional[pygame.Surface]:
+        """Load the enemy sprite from disk if available."""
+
+        cls = type(self)
+        if cls._sprite_surface is not None:
+            return cls._sprite_surface
+
+        sprite_path = _assets_dir() / "monstre.png"
+        if not sprite_path.exists():
+            return None
+
+        try:
+            image = pygame.image.load(str(sprite_path))
+        except pygame.error:
+            return None
+
+        if pygame.display.get_surface():
+            try:
+                image = image.convert_alpha()
+            except pygame.error:
+                pass
+
+        cls._sprite_surface = pygame.transform.scale(image, self.rect.size)
+        cls._sprite_surface_flipped = None
+        return cls._sprite_surface
+
+    def get_oriented_sprite(self) -> Optional[pygame.Surface]:
+        """Return the sprite oriented based on patrol direction, if present."""
+
+        base = self._sprite_surface or self._ensure_sprite()
+        if base is None:
+            return None
+        if self.facing >= 0:
+            return base
+        cls = type(self)
+        if cls._sprite_surface_flipped is None:
+            cls._sprite_surface_flipped = pygame.transform.flip(base, True, False)
+        return cls._sprite_surface_flipped

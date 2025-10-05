@@ -130,7 +130,12 @@ def draw(
 
     # Draw enemies and player
     for enemy in enemies:
-        pygame.draw.rect(screen, (220, 20, 60), enemy.rect.move(-camera.x, -camera.y))
+        enemy_rect = enemy.rect.move(-camera.x, -camera.y)
+        sprite = enemy.get_oriented_sprite()
+        if sprite is not None:
+            screen.blit(sprite, enemy_rect.topleft)
+        else:
+            pygame.draw.rect(screen, (220, 20, 60), enemy_rect)
     player_rect = player.rect.move(-camera.x, -camera.y)
     sprite = player.get_oriented_sprite()
     if sprite is not None:
