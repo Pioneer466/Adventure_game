@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence, Tuple
+from pathlib import Path
+from typing import Iterable, List, Optional, Sequence, Tuple
 
 import pygame
 
@@ -89,10 +90,13 @@ class Entity:
 class Player(Entity):
     """Player controlled character."""
 
+    _sprite_surface: Optional[pygame.Surface] = None
+    _sprite_surface_flipped: Optional[pygame.Surface] = None
+
     def __init__(self, x: int, y: int) -> None:
         super().__init__(x, y, 40, 60)
         self.speed = 220  # pixels per second
-        self.jump_strength = -420
+        self.jump_strength = -500
         self.attack_cooldown = 0.4
         self.attack_timer = 0.0
         self.attack_indicator_duration = 0.18
@@ -105,6 +109,11 @@ class Player(Entity):
         self.facing = 1
         self.double_jump_charges = 0
         self.air_jump_performed = False
+        self.jump_buffer_window = 0.15
+        self.jump_buffer_timer = 0.0
+        self.coyote_time = 0.12
+        self.coyote_timer = 0.0
+        self._ensure_sprite()
 
     def update(
         self,
@@ -126,21 +135,37 @@ class Player(Entity):
         elif self.velocity.x < 0:
             self.facing = -1
 
+        if self.on_ground:
+            self.coyote_timer = self.coyote_time
+        else:
+            self.coyote_timer = max(0.0, self.coyote_timer - dt)
+
         if jump_pressed:
-            if self.on_ground:
-                self.velocity.y = self.jump_strength
-                self.on_ground = False
-                self.air_jump_performed = False
-            elif self.double_jump_charges > 0 and not self.air_jump_performed:
-                self.velocity.y = self.jump_strength
-                self.double_jump_charges = max(0, self.double_jump_charges - 1)
-                self.air_jump_performed = True
+            self.jump_buffer_timer = self.jump_buffer_window
+
+        can_ground_jump = self.on_ground or self.coyote_timer > 0.0
+        if can_ground_jump and self.jump_buffer_timer > 0.0:
+            self.velocity.y = self.jump_strength
+            self.on_ground = False
+            self.air_jump_performed = False
+            self.jump_buffer_timer = 0.0
+            self.coyote_timer = 0.0
+        elif jump_pressed and self.double_jump_charges > 0 and not self.air_jump_performed:
+            self.velocity.y = self.jump_strength
+            self.double_jump_charges = max(0, self.double_jump_charges - 1)
+            self.air_jump_performed = True
 
         self.apply_gravity(dt)
         self.move_and_collide(platforms, dt)
 
         if self.on_ground:
             self.air_jump_performed = False
+            self.coyote_timer = self.coyote_time
+        else:
+            self.coyote_timer = max(0.0, self.coyote_timer - dt)
+
+        if self.jump_buffer_timer > 0.0:
+            self.jump_buffer_timer = max(0.0, self.jump_buffer_timer - dt)
 
         if self.attack_timer > 0:
             self.attack_timer = max(0.0, self.attack_timer - dt)
@@ -156,8 +181,8 @@ class Player(Entity):
             return []
 
         self.attack_timer = self.attack_cooldown
-        attack_rect = self.rect.inflate(40, 20)
-        reach = 60
+        attack_rect = self.rect.inflate(50, 24)
+        reach = 80
         if self.facing >= 0:
             attack_rect.width += reach
         else:
@@ -207,6 +232,47 @@ class Player(Entity):
         self.double_jump_charges = 0
         self.air_jump_performed = False
         self.on_ground = False
+        self.jump_buffer_timer = 0.0
+        self.coyote_timer = 0.0
+
+    def _ensure_sprite(self) -> Optional[pygame.Surface]:
+        """Load and cache the hero sprite if the asset is available."""
+
+        cls = type(self)
+        if cls._sprite_surface is not None:
+            return cls._sprite_surface
+
+        assets_dir = Path(__file__).resolve().parent.parent / "assets"
+        sprite_path = assets_dir / "hero.png"
+        if not sprite_path.exists():
+            return None
+
+        try:
+            image = pygame.image.load(str(sprite_path))
+        except pygame.error:
+            return None
+
+        if pygame.display.get_surface():
+            try:
+                image = image.convert_alpha()
+            except pygame.error:
+                pass
+
+        cls._sprite_surface = pygame.transform.scale(image, self.rect.size)
+        return cls._sprite_surface
+
+    def get_oriented_sprite(self) -> Optional[pygame.Surface]:
+        """Return the sprite oriented based on facing direction, if available."""
+
+        base = self._sprite_surface or self._ensure_sprite()
+        if base is None:
+            return None
+        if self.facing >= 0:
+            return base
+        cls = type(self)
+        if cls._sprite_surface_flipped is None:
+            cls._sprite_surface_flipped = pygame.transform.flip(base, True, False)
+        return cls._sprite_surface_flipped
 
 
 class Enemy(Entity):

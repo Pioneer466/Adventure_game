@@ -132,13 +132,37 @@ def draw(
     for enemy in enemies:
         pygame.draw.rect(screen, (220, 20, 60), enemy.rect.move(-camera.x, -camera.y))
     player_rect = player.rect.move(-camera.x, -camera.y)
-    pygame.draw.rect(screen, (65, 105, 225), player_rect)
+    sprite = player.get_oriented_sprite()
+    if sprite is not None:
+        screen.blit(sprite, player_rect.topleft)
+    else:
+        pygame.draw.rect(screen, (65, 105, 225), player_rect)
 
     if player.is_attacking:
         attack_rect = player.get_attack_hitbox().move(-camera.x, -camera.y)
         overlay = pygame.Surface(attack_rect.size, pygame.SRCALPHA)
-        overlay.fill((255, 215, 0, 120))
+        duration = max(0.001, player.attack_indicator_duration)
+        progress = 1.0 - (player.attack_indicator_timer / duration)
+        core_color = (255, 215, 0, int(200 - 120 * progress))
+        accent_color = (255, 255, 255, int(220 - 160 * progress))
+        pygame.draw.rect(overlay, core_color, overlay.get_rect(), border_radius=12)
+        width, height = overlay.get_size()
+        if width > 0 and height > 0:
+            if player.facing >= 0:
+                slash_points = [
+                    (width * 0.15, height * 0.2),
+                    (width * 0.95, height * 0.5),
+                    (width * 0.15, height * 0.8),
+                ]
+            else:
+                slash_points = [
+                    (width * 0.85, height * 0.2),
+                    (width * 0.05, height * 0.5),
+                    (width * 0.85, height * 0.8),
+                ]
+            pygame.draw.polygon(overlay, accent_color, slash_points)
         screen.blit(overlay, attack_rect.topleft)
+        pygame.draw.rect(screen, (255, 255, 255), player_rect.inflate(6, 6), 2)
 
     # Draw health (three hearts)
     heart_size = 20

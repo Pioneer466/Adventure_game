@@ -32,3 +32,9 @@ python -m src.game.main
 - Le héros dispose de trois cœurs visibles en haut de l'écran ; une collision avec un ennemi enlève un cœur. Tomber dans le vide consomme toutes les vies et affiche l'écran de défaite.
 - Une aura dorée s'affiche brièvement devant le personnage pour indiquer la zone d'impact de l'attaque.
 - La caméra suit automatiquement le personnage au cours de sa progression dans le niveau.
+
+## Personnaliser le héros
+
+Le moteur charge automatiquement un sprite situé dans `assets/hero.png` pour représenter le personnage
+principal. Copiez simplement votre image (par exemple le héros fourni) dans ce fichier pour la voir
+apparaître en jeu. Sans ce fichier, un rectangle bleu est affiché par défaut.

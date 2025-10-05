@@ -10,74 +10,81 @@ LevelData = Dict[str, object]
 def load_level() -> LevelData:
     """Return the level data describing geometry and entity placement."""
 
-    width, height = 2200, 680
-    ground_height = 110
+    width, height = 2600, 640
+    ground_height = 90
 
     platforms: List[Tuple[int, int, int, int]] = []
 
     ground_y = height - ground_height
 
-    # Ground segments with gentle gaps to create rhythm over a longer run.
+    # Ground segments with forgiving spacing to encourage forward motion.
     platforms.extend(
         [
-            (0, ground_y, 420, ground_height),
-            (460, ground_y, 320, ground_height),
-            (820, ground_y, 260, ground_height),
-            (1120, ground_y, 220, ground_height),
-            (1380, ground_y, 220, ground_height),
-            (1660, ground_y, 220, ground_height),
-            (1920, ground_y, 280, ground_height),
+            (0, ground_y, 520, ground_height),
+            (600, ground_y, 340, ground_height),
+            (1000, ground_y, 320, ground_height),
+            (1380, ground_y, 320, ground_height),
+            (1760, ground_y, 340, ground_height),
+            (2140, ground_y, 460, ground_height),
         ]
     )
 
-    # Staggered upper platforms to build a flowing skyline route.
+    # Floating platforms with gentle height differences for approachable jumps.
     platforms.extend(
         [
-            (320, ground_y - 70, 120, 20),
-            (520, ground_y - 120, 140, 20),
-            (700, ground_y - 160, 140, 20),
-            (880, ground_y - 200, 140, 20),
-            (1020, ground_y - 150, 140, 20),
-            (1080, ground_y - 90, 160, 20),
-            (1180, ground_y - 200, 140, 20),
-            (1320, ground_y - 240, 140, 20),
-            (1480, ground_y - 190, 140, 20),
-            (1640, ground_y - 230, 150, 20),
-            (1800, ground_y - 180, 150, 20),
-            (1980, ground_y - 220, 150, 20),
-            (2100, ground_y - 150, 120, 20),
+            (200, ground_y - 70, 150, 24),
+            (420, ground_y - 120, 160, 24),
+            (660, ground_y - 110, 160, 24),
+            (880, ground_y - 150, 150, 24),
+            (1100, ground_y - 120, 180, 24),
+            (1260, ground_y - 170, 180, 24),
+            (1480, ground_y - 110, 170, 24),
+            (1660, ground_y - 160, 170, 24),
+            (1860, ground_y - 110, 170, 24),
+            (2040, ground_y - 160, 180, 24),
+            (2240, ground_y - 120, 170, 24),
+            (2420, ground_y - 90, 130, 24),
         ]
     )
 
-    # Enclosed finale to showcase the goal room clearly.
-    finish_top = ground_y - 150
+    # Access ramps near the checkpoint.
     platforms.extend(
         [
-            (2020, finish_top, 20, 150),
-            (2150, finish_top, 20, 150),
-            (2020, finish_top, 150, 20),
-            (2040, finish_top + 60, 110, 20),
+            (1180, ground_y - 40, 90, 40),
+            (1540, ground_y - 40, 90, 40),
+        ]
+    )
+
+    # Enclosed finale to highlight the goal chamber.
+    finish_top = ground_y - 120
+    platforms.extend(
+        [
+            (2320, finish_top, 20, 120),
+            (2460, finish_top, 20, 120),
+            (2320, finish_top, 160, 20),
+            (2340, finish_top + 60, 120, 20),
         ]
     )
 
     enemies = [
-        {"x": 220, "y": ground_y - 50, "min_x": 120, "max_x": 360, "health": 3},
-        {"x": 600, "y": ground_y - 170, "min_x": 520, "max_x": 700, "health": 3},
-        {"x": 880, "y": ground_y - 250, "min_x": 820, "max_x": 940, "health": 3},
-        {"x": 1260, "y": ground_y - 50, "min_x": 1180, "max_x": 1360, "health": 3},
-        {"x": 1720, "y": ground_y - 80, "min_x": 1660, "max_x": 1820, "health": 3},
-        {"x": 2050, "y": ground_y - 210, "min_x": 1980, "max_x": 2100, "health": 3},
+        {"x": 260, "y": ground_y - 50, "min_x": 120, "max_x": 420, "health": 3},
+        {"x": 720, "y": ground_y - 150, "min_x": 660, "max_x": 820, "health": 3},
+        {"x": 1180, "y": ground_y - 200, "min_x": 1100, "max_x": 1300, "health": 3},
+        {"x": 1560, "y": ground_y - 70, "min_x": 1480, "max_x": 1660, "health": 3},
+        {"x": 1980, "y": ground_y - 200, "min_x": 1880, "max_x": 2060, "health": 3},
+        {"x": 2360, "y": ground_y - 100, "min_x": 2240, "max_x": 2440, "health": 3},
     ]
 
-    finish_zone = (2060, finish_top + 20, 90, 110)
+    finish_zone = (2360, finish_top + 20, 120, 80)
 
-    checkpoint_zone = (1090, ground_y - 200, 140, 200)
-    checkpoint_respawn = (1120, ground_y - 150)
+    checkpoint_zone = (1280, ground_y - 180, 200, 200)
+    checkpoint_respawn = (1340, ground_y - 140)
 
     energy_orbs = [
-        {"x": 760, "y": ground_y - 190},
-        {"x": 1220, "y": ground_y - 170},
-        {"x": 1820, "y": ground_y - 210},
+        {"x": 620, "y": ground_y - 140},
+        {"x": 1400, "y": ground_y - 210},
+        {"x": 1860, "y": ground_y - 180},
+        {"x": 2260, "y": ground_y - 150},
     ]
 
     return {
