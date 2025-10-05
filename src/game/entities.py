@@ -7,7 +7,7 @@ from typing import Iterable, List, Sequence
 
 import pygame
 
-GRAVITY = 900  # pixels per second squared
+GRAVITY = 1200  # pixels per second squared
 
 
 @dataclass
@@ -67,6 +67,10 @@ class Player(Entity):
         self.jump_strength = -420
         self.attack_cooldown = 0.4
         self.attack_timer = 0.0
+        self.max_health = 3
+        self.health = self.max_health
+        self.invulnerability_time = 0.8
+        self.invulnerability_timer = 0.0
 
     def update(
         self,
@@ -90,6 +94,8 @@ class Player(Entity):
 
         if self.attack_timer > 0:
             self.attack_timer = max(0.0, self.attack_timer - dt)
+        if self.invulnerability_timer > 0:
+            self.invulnerability_timer = max(0.0, self.invulnerability_timer - dt)
 
     def attack(self, enemies: Iterable["Enemy"]) -> List["Enemy"]:
         """Perform a melee attack and return the enemies that were defeated."""
@@ -105,6 +111,21 @@ class Player(Entity):
                 if enemy.take_damage(1):
                     defeated.append(enemy)
         return defeated
+
+    def take_damage(self, amount: int) -> bool:
+        """Apply damage to the player. Returns ``True`` when health hits zero."""
+
+        if self.invulnerability_timer > 0:
+            return False
+
+        self.health = max(0, self.health - amount)
+        if self.health > 0:
+            self.invulnerability_timer = self.invulnerability_time
+        return self.health <= 0
+
+    @property
+    def is_dead(self) -> bool:
+        return self.health <= 0
 
 
 class Enemy(Entity):
